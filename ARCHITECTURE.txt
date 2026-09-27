@@ -1,0 +1,34 @@
+LOCAL
+-----
+Postman / Browser
+      |
+      v
++-----------------------+
+| Node.js API container |
+| port 3000             |
++-----------+-----------+
+            |
+            v
++-----------------------+
+| MongoDB container     |
+| port 27017            |
++-----------------------+
+
+CI/CD
+-----
+Git push
+   |
+   v
+GitHub Actions
+   |-- npm test
+   |-- npm audit
+   |-- docker build
+   |-- Trivy scan
+   v
+Render deploy hook (optional)
+   |
+   v
+Render Docker service
+   |
+   v
+MongoDB Atlas
