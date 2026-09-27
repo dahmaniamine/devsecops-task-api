@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="description" content="A Dockerized task manager built with Node.js, MongoDB and a secure CI/CD pipeline." />
+  <title>DevSecOps Task Board</title>
+  <link rel="stylesheet" href="/styles.css" />
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <div class="page-shell">
+    <header class="topbar">
+      <div>
+        <div class="eyebrow">DOCKER · NODE.JS · MONGODB · CI/CD</div>
+        <h1>DevSecOps Task Board</h1>
+        <p class="subtitle">A real frontend connected to your containerized REST API.</p>
+      </div>
+      <div class="service-status" id="serviceStatus" aria-live="polite">
+        <span class="status-dot"></span>
+        <span>Checking API…</span>
+      </div>
+    </header>
+
+    <main class="layout">
+      <section class="panel composer-panel">
+        <div class="panel-heading">
+          <div>
+            <span class="section-kicker">TASK EDITOR</span>
+            <h2 id="formHeading">Create a task</h2>
+          </div>
+          <button id="cancelEditButton" class="button ghost hidden" type="button">Cancel edit</button>
+        </div>
+
+        <form id="taskForm" class="task-form">
+          <input id="editingTaskId" type="hidden" />
+          <label>
+            <span>Title</span>
+            <input id="title" name="title" minlength="2" maxlength="120" placeholder="e.g. Configure production deployment" required />
+          </label>
+          <label>
+            <span>Description</span>
+            <textarea id="description" name="description" maxlength="500" rows="5" placeholder="Add useful details about the task…"></textarea>
+          </label>
+          <button class="button primary" id="submitButton" type="submit">Add task</button>
+        </form>
+      </section>
+
+      <section class="workspace">
+        <div class="stats-grid" aria-label="Task statistics">
+          <article class="stat-card">
+            <span>Total tasks</span>
+            <strong id="totalCount">0</strong>
+          </article>
+          <article class="stat-card">
+            <span>Open</span>
+            <strong id="openCount">0</strong>
+          </article>
+          <article class="stat-card">
+            <span>Completed</span>
+            <strong id="completedCount">0</strong>
+          </article>
+        </div>
+
+        <section class="panel tasks-panel">
+          <div class="tasks-toolbar">
+            <div>
+              <span class="section-kicker">WORK QUEUE</span>
+              <h2>Your tasks</h2>
+            </div>
+            <div class="toolbar-actions">
+              <div class="filters" role="group" aria-label="Filter tasks">
+                <button class="filter active" data-filter="all" type="button">All</button>
+                <button class="filter" data-filter="open" type="button">Open</button>
+                <button class="filter" data-filter="completed" type="button">Done</button>
+              </div>
+              <button class="button icon-button" id="refreshButton" type="button" title="Refresh tasks" aria-label="Refresh tasks">↻</button>
+            </div>
+          </div>
+
+          <div id="loadingState" class="state-message">Loading tasks…</div>
+          <div id="errorState" class="state-message error hidden"></div>
+          <div id="emptyState" class="empty-state hidden">
+            <div class="empty-icon">✓</div>
+            <h3>No tasks here</h3>
+            <p>Create a task or change the current filter.</p>
+          </div>
+          <div id="taskList" class="task-list"></div>
+        </section>
+      </section>
+    </main>
+  </div>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+</body>
+</html>

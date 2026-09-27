@@ -6,7 +6,6 @@ WORKDIR /app
 
 COPY package*.json ./
 
-# Reproducible production dependency installation
 RUN npm ci --omit=dev
 
 
@@ -16,8 +15,6 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 
-# Install available Alpine security patches
-# npm is not needed at runtime, so remove it to reduce attack surface
 RUN apk upgrade --no-cache \
     && rm -rf /usr/local/lib/node_modules/npm \
     && rm -f /usr/local/bin/npm /usr/local/bin/npx \
@@ -27,6 +24,7 @@ RUN apk upgrade --no-cache \
 COPY --from=dependencies /app/node_modules ./node_modules
 COPY package.json ./
 COPY src ./src
+COPY public ./public
 
 USER appuser
 

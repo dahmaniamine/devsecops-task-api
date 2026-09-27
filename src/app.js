@@ -1,3 +1,4 @@
+const path = require('path');
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
@@ -11,16 +12,8 @@ app.use(helmet());
 app.use(cors());
 app.use(express.json({ limit: '100kb' }));
 
-app.get('/', (req, res) => {
-  res.status(200).json({
-    name: 'DevSecOps Task API',
-    endpoints: {
-      health: 'GET /health',
-      tasks: 'GET/POST /api/tasks',
-      task: 'GET/PUT/DELETE /api/tasks/:id'
-    }
-  });
-});
+// Serve the browser UI from /public. Visiting http://localhost:3000 now opens the app.
+app.use(express.static(path.join(__dirname, '../public')));
 
 app.get('/health', (req, res) => {
   res.status(200).json({
