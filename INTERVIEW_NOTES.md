@@ -1,81 +1,46 @@
-# Interview Notes — DevSecOps Task API
+# SecureShip Lite - Interview Notes
 
-Use this only after you have run the project yourself and understand the commands.
+## 30-second explanation
 
-## Docker
+SecureShip Lite is a small secure software-delivery platform built around a Node.js and MongoDB workload. A GitHub Actions pipeline runs tests and dependency auditing, builds a hardened Docker image, scans it with Trivy, applies a security policy gate, generates a CycloneDX SBOM, uploads security evidence and publishes approved images to GitHub Container Registry. The dashboard reads real GitHub Actions data and shows the current release gate, supply-chain stages, service health and deployment readiness.
 
-**What Docker does:** packages the application, runtime, dependencies and configuration into a repeatable container image.
+## Why the task API still exists
 
-**Dockerfile:** instructions used to build the API image.
+The task API is the managed workload. The DevSecOps work is the system around it: build, test, scan, evidence, registry and deployment controls.
 
-**Docker Compose:** runs multiple related containers together. In this project it starts the Node.js API and MongoDB.
+## Strong real story from this project
 
-Useful commands:
+The first Trivy-enabled pipeline did not pass. It found HIGH/CRITICAL vulnerabilities in the runtime image. Instead of disabling the scanner, the image was hardened by applying Alpine security updates and removing npm from the production runtime because the application only needs Node to run. The next Trivy scan passed. This is a good example of a security gate changing the release process.
 
-```bash
-docker compose up --build
-docker compose ps
-docker compose logs -f api
-docker compose down
-```
+## Key concepts to explain
 
-## CI vs CD
+### Docker
+A container packages the application and runtime into a repeatable unit. Docker Compose runs the API and MongoDB together locally.
 
-**Continuous Integration (CI):** automatically validates changes through tests/build/security checks after code is pushed.
+### CI/CD
+CI validates every change automatically. CD promotes an approved build toward staging/production. Deployment steps are skipped visibly if the required secrets are not configured.
 
-**Continuous Delivery/Deployment (CD):** automatically prepares or releases a validated version to an environment.
+### Trivy
+Trivy scans the built image. The workflow writes JSON evidence instead of only printing text.
 
-Project pipeline:
+### Security policy gate
+`scripts/security-gate.js` reads the Trivy report. A fixable HIGH or CRITICAL finding blocks the workflow.
 
-```text
-Push -> Tests -> npm audit -> Docker build -> Trivy scan -> Render deploy hook
-```
+### SBOM
+The CycloneDX SBOM records the software components included in the release. It is useful for supply-chain visibility and incident response.
 
-## GitHub Actions
+### GHCR
+Approved images are pushed to GitHub Container Registry with the exact Git commit SHA and `latest`. The SHA tag gives traceability from runtime artifact back to source.
 
-GitHub Actions reads `.github/workflows/ci.yml`.
+### Staging smoke test
+If a staging URL is configured, the pipeline polls its health endpoint. A failed smoke test stops promotion before production.
 
-The workflow runs on pushes and pull requests to `main`/`master`.
+### Non-root container
+The production container runs as `appuser`, reducing the impact of a container compromise.
 
-If any enforced step fails, later steps do not complete successfully. This prevents a known-bad build from being deployed.
+## Things not to claim
 
-## Trivy
-
-Trivy scans the final container image for known operating-system/package vulnerabilities.
-
-This is a simple example of "shifting security left": checking security automatically during development rather than waiting until after deployment.
-
-## npm audit
-
-`npm audit` checks Node.js dependency metadata against known vulnerabilities.
-
-It is different from Trivy because Trivy scans the full container image while npm audit focuses on npm dependencies.
-
-## Secrets
-
-The MongoDB URI and Render deploy hook must not be committed into source control.
-
-Local secrets go in `.env` (ignored by Git). Cloud/CI secrets go into the secret-management features of Render/GitHub.
-
-## Health checks
-
-`GET /health` returns 200 when the HTTP application is available.
-
-Docker and Render can use health checks to detect whether the service is healthy.
-
-## Non-root container
-
-The Dockerfile creates and uses `appuser`. Running the process as non-root reduces the impact of some container compromises.
-
-## Questions you should be able to answer
-
-1. What is the difference between an image and a container?
-2. Why do we use Docker Compose here?
-3. What happens after `git push`?
-4. What is CI/CD?
-5. Why run tests before deployment?
-6. What does Trivy scan?
-7. Why should secrets not be inside Git?
-8. Why does the container run as a non-root user?
-9. What is the purpose of `/health`?
-10. What happens if the security scan fails?
+- Do not say Kubernetes is used. It is not.
+- Do not say images are cryptographically signed. Cosign is not part of Lite yet.
+- Do not say production is deployed unless the Render secret is actually configured and the deployment step succeeds.
+- The dashboard's HIGH/CRITICAL counts refer to findings that reached the release gate after Trivy filtering, not every theoretical vulnerability in every dependency database.

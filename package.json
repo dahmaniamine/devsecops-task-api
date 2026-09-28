@@ -1,13 +1,14 @@
 {
   "name": "devsecops-task-api",
   "version": "1.0.0",
-  "description": "Small Dockerized REST API project demonstrating Git, CI/CD, containerization and DevSecOps basics.",
+  "description": "SecureShip Lite: a Dockerized API with live CI/CD, supply-chain evidence and a DevSecOps release dashboard.",
   "main": "src/server.js",
   "scripts": {
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
     "test": "jest --runInBand --coverage",
-    "test:watch": "jest --watch"
+    "test:watch": "jest --watch",
+    "security:gate": "node scripts/security-gate.js trivy-report.json"
   },
   "engines": {
     "node": ">=20"

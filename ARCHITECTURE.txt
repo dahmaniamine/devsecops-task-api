@@ -1,34 +1,37 @@
-LOCAL
------
-Postman / Browser
-      |
-      v
-+-----------------------+
-| Node.js API container |
-| port 3000             |
-+-----------+-----------+
-            |
-            v
-+-----------------------+
-| MongoDB container     |
-| port 27017            |
-+-----------------------+
+SECURESHIP LITE ARCHITECTURE
+============================
 
-CI/CD
------
-Git push
+Developer
+   |
+   | git push
+   v
+GitHub Repository
    |
    v
 GitHub Actions
-   |-- npm test
-   |-- npm audit
-   |-- docker build
-   |-- Trivy scan
-   v
-Render deploy hook (optional)
    |
-   v
-Render Docker service
+   +--> npm ci
+   +--> Jest / Supertest
+   +--> npm audit
+   +--> Docker build
+   +--> Trivy JSON scan
+   +--> Security policy gate
+   +--> CycloneDX SBOM
+   +--> Security evidence artifact
+   +--> GHCR image (commit SHA + latest)
+   +--> optional staging deploy
+   +--> optional staging smoke test
+   +--> optional production deploy
+
+SecureShip Dashboard
    |
-   v
-MongoDB Atlas
+   +--> GitHub Actions API (real pipeline data)
+   +--> Node.js service health
+   +--> MongoDB health
+   +--> release gate / deployment readiness
+
+Managed workload
+   |
+   +--> Node.js / Express API
+   +--> MongoDB
+   +--> Docker Compose locally

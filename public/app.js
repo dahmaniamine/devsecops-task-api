@@ -1,29 +1,47 @@
-const API_URL = '/api/tasks';
-
-const state = {
-  tasks: [],
-  filter: 'all',
-  busy: false
-};
+const OVERVIEW_URL = '/api/devsecops/overview';
+const TASKS_URL = '/api/tasks';
 
 const elements = {
-  form: document.querySelector('#taskForm'),
-  title: document.querySelector('#title'),
-  description: document.querySelector('#description'),
-  editingTaskId: document.querySelector('#editingTaskId'),
-  formHeading: document.querySelector('#formHeading'),
-  submitButton: document.querySelector('#submitButton'),
-  cancelEditButton: document.querySelector('#cancelEditButton'),
-  taskList: document.querySelector('#taskList'),
-  loadingState: document.querySelector('#loadingState'),
-  errorState: document.querySelector('#errorState'),
-  emptyState: document.querySelector('#emptyState'),
-  totalCount: document.querySelector('#totalCount'),
-  openCount: document.querySelector('#openCount'),
-  completedCount: document.querySelector('#completedCount'),
-  serviceStatus: document.querySelector('#serviceStatus'),
   refreshButton: document.querySelector('#refreshButton'),
-  toast: document.querySelector('#toast')
+  repoLink: document.querySelector('#repoLink'),
+  workflowLink: document.querySelector('#workflowLink'),
+  gateBadge: document.querySelector('#gateBadge'),
+  releaseTitle: document.querySelector('#releaseTitle'),
+  releaseMeta: document.querySelector('#releaseMeta'),
+  commitSha: document.querySelector('#commitSha'),
+  branchValue: document.querySelector('#branchValue'),
+  eventValue: document.querySelector('#eventValue'),
+  durationValue: document.querySelector('#durationValue'),
+  environmentValue: document.querySelector('#environmentValue'),
+  shieldIcon: document.querySelector('#shieldIcon'),
+  criticalCount: document.querySelector('#criticalCount'),
+  highCount: document.querySelector('#highCount'),
+  sbomState: document.querySelector('#sbomState'),
+  securityStatement: document.querySelector('#securityStatement'),
+  apiStatus: document.querySelector('#apiStatus'),
+  apiDetail: document.querySelector('#apiDetail'),
+  databaseStatus: document.querySelector('#databaseStatus'),
+  registryStatus: document.querySelector('#registryStatus'),
+  registryImage: document.querySelector('#registryImage'),
+  productionStatus: document.querySelector('#productionStatus'),
+  pipelineStages: document.querySelector('#pipelineStages'),
+  stagingStatus: document.querySelector('#stagingStatus'),
+  smokeStatus: document.querySelector('#smokeStatus'),
+  productionPathStatus: document.querySelector('#productionPathStatus'),
+  imageEvidence: document.querySelector('#imageEvidence'),
+  runHistory: document.querySelector('#runHistory'),
+  lastUpdated: document.querySelector('#lastUpdated'),
+  toast: document.querySelector('#toast'),
+  workloadForm: document.querySelector('#workloadTaskForm'),
+  workloadTitle: document.querySelector('#workloadTitle'),
+  workloadDescription: document.querySelector('#workloadDescription'),
+  workloadSubmit: document.querySelector('#workloadSubmit'),
+  workloadRefresh: document.querySelector('#workloadRefresh'),
+  workloadTasks: document.querySelector('#workloadTasks'),
+  workloadEmpty: document.querySelector('#workloadEmpty'),
+  workloadError: document.querySelector('#workloadError'),
+  workloadCount: document.querySelector('#workloadCount'),
+  workloadStatus: document.querySelector('#workloadStatus')
 };
 
 let toastTimer;
@@ -43,10 +61,211 @@ function showToast(message, type = 'success') {
   elements.toast.className = `toast show${type === 'error' ? ' error' : ''}`;
   toastTimer = setTimeout(() => {
     elements.toast.className = 'toast';
-  }, 2600);
+  }, 2800);
 }
 
-async function apiRequest(url, options = {}) {
+function formatDuration(seconds) {
+  if (seconds === null || seconds === undefined) return '—';
+  if (seconds < 60) return `${seconds}s`;
+  const minutes = Math.floor(seconds / 60);
+  const rest = seconds % 60;
+  return `${minutes}m ${rest}s`;
+}
+
+function formatDate(value) {
+  if (!value) return '—';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '—';
+  return date.toLocaleString();
+}
+
+function prettyStatus(value) {
+  if (!value) return 'Pending';
+  return value
+    .replaceAll('_', ' ')
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function statusClass(value) {
+  if (value === 'success' || value === 'healthy' || value === 'approved') return 'good';
+  if (value === 'failure' || value === 'blocked' || value === 'disconnected') return 'bad';
+  if (value === 'in_progress' || value === 'queued' || value === 'pending') return 'warn';
+  return '';
+}
+
+function stageIcon(status) {
+  if (status === 'success') return '✓';
+  if (status === 'failure') return '×';
+  if (status === 'skipped') return '–';
+  if (status === 'in_progress') return '●';
+  if (status === 'queued') return '…';
+  return '·';
+}
+
+function renderGate(github) {
+  const latest = github.latestRun;
+  const gate = github.security?.gate || 'unknown';
+
+  elements.gateBadge.className = `gate-badge ${gate}`;
+  elements.gateBadge.textContent = gate === 'approved'
+    ? 'APPROVED'
+    : gate === 'blocked'
+      ? 'BLOCKED'
+      : gate === 'pending'
+        ? 'IN PROGRESS'
+        : 'UNKNOWN';
+
+  if (latest) {
+    elements.releaseTitle.textContent = latest.title;
+    elements.releaseMeta.textContent = latest.conclusion === 'success'
+      ? 'All configured release controls completed successfully.'
+      : latest.status === 'in_progress'
+        ? 'The latest release pipeline is currently running.'
+        : `Latest workflow result: ${prettyStatus(latest.conclusion || latest.status)}.`;
+    elements.commitSha.textContent = latest.shortSha || '—';
+    elements.branchValue.textContent = latest.branch || '—';
+    elements.eventValue.textContent = latest.event || '—';
+    elements.durationValue.textContent = formatDuration(latest.durationSeconds);
+    elements.workflowLink.href = latest.url;
+    elements.workflowLink.classList.remove('disabled');
+  } else {
+    elements.releaseTitle.textContent = 'No pipeline data available';
+    elements.releaseMeta.textContent = github.error || 'Push to main to create the first SecureShip release.';
+  }
+}
+
+function renderSecurity(github) {
+  const security = github.security || {};
+  const approved = security.gate === 'approved';
+  const blocked = security.gate === 'blocked';
+
+  elements.shieldIcon.textContent = approved ? '✓' : blocked ? '!' : '…';
+  elements.shieldIcon.classList.toggle('blocked', blocked);
+  elements.criticalCount.textContent = security.critical ?? '—';
+  elements.highCount.textContent = security.high ?? '—';
+  elements.sbomState.textContent = security.sbomStatus === 'success'
+    ? 'READY'
+    : prettyStatus(security.sbomStatus || 'pending').toUpperCase();
+  elements.securityStatement.textContent = security.statement || 'No security statement available.';
+}
+
+function renderServices(data) {
+  const apiStatus = data.service?.status || 'unknown';
+  const dbStatus = data.database?.status || 'unknown';
+  const registryStage = data.github?.stages?.find((stage) => stage.key === 'registry');
+  const productionStage = data.github?.deployments?.production || 'pending';
+
+  elements.apiStatus.textContent = prettyStatus(apiStatus);
+  elements.apiStatus.className = statusClass(apiStatus);
+  elements.apiDetail.textContent = `${data.service?.nodeVersion || 'Node'} · ${Math.round((data.service?.uptimeSeconds || 0) / 60)}m uptime`;
+
+  elements.databaseStatus.textContent = prettyStatus(dbStatus);
+  elements.databaseStatus.className = statusClass(dbStatus);
+
+  elements.registryStatus.textContent = registryStage?.status === 'success'
+    ? 'Published'
+    : prettyStatus(registryStage?.status || 'pending');
+  elements.registryStatus.className = statusClass(registryStage?.status);
+  elements.registryImage.textContent = data.github?.image || '—';
+  elements.imageEvidence.textContent = data.github?.image || 'Tagged with the Git commit SHA';
+
+  elements.productionStatus.textContent = productionStage === 'skipped'
+    ? 'Not configured'
+    : prettyStatus(productionStage);
+  elements.productionStatus.className = statusClass(productionStage);
+}
+
+function renderPipeline(stages = []) {
+  if (!stages.length) {
+    elements.pipelineStages.innerHTML = '<div class="loading-block">No workflow stages available.</div>';
+    return;
+  }
+
+  elements.pipelineStages.innerHTML = stages.map((stage, index) => `
+    <article class="stage ${escapeHtml(stage.status)}">
+      <div class="stage-top">
+        <span class="stage-index">${String(index + 1).padStart(2, '0')}</span>
+        <span class="stage-icon">${stageIcon(stage.status)}</span>
+      </div>
+      <strong>${escapeHtml(stage.label)}</strong>
+      <small>${escapeHtml(prettyStatus(stage.status))}</small>
+    </article>
+  `).join('');
+}
+
+function renderDeployments(deployments = {}) {
+  const normalized = (status) => status === 'skipped' ? 'Not configured' : prettyStatus(status || 'pending');
+
+  elements.stagingStatus.textContent = normalized(deployments.staging);
+  elements.stagingStatus.className = statusClass(deployments.staging);
+  elements.smokeStatus.textContent = normalized(deployments.smokeTest);
+  elements.smokeStatus.className = statusClass(deployments.smokeTest);
+  elements.productionPathStatus.textContent = normalized(deployments.production);
+  elements.productionPathStatus.className = statusClass(deployments.production);
+}
+
+function renderHistory(runs = []) {
+  if (!runs.length) {
+    elements.runHistory.innerHTML = '<tr><td colspan="7" class="table-empty">No runs found.</td></tr>';
+    return;
+  }
+
+  elements.runHistory.innerHTML = runs.map((run) => {
+    const state = run.conclusion || run.status || 'unknown';
+    return `
+      <tr>
+        <td><span class="status-pill ${escapeHtml(state)}">${escapeHtml(prettyStatus(state))}</span></td>
+        <td>${escapeHtml(run.title || 'Pipeline')}</td>
+        <td class="mono">${escapeHtml(run.shortSha || '—')}</td>
+        <td>${escapeHtml(run.branch || '—')}</td>
+        <td>${escapeHtml(run.event || '—')}</td>
+        <td>${escapeHtml(formatDuration(run.durationSeconds))}</td>
+        <td>${escapeHtml(formatDate(run.createdAt))}</td>
+      </tr>
+    `;
+  }).join('');
+}
+
+async function loadOverview({ force = false, silent = false } = {}) {
+  if (!silent) elements.refreshButton.disabled = true;
+
+  try {
+    const response = await fetch(`${OVERVIEW_URL}${force ? '?refresh=true' : ''}`);
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.message || 'Could not load SecureShip overview');
+    }
+
+    const github = data.github || {};
+    elements.repoLink.href = github.repositoryUrl || '#';
+    elements.environmentValue.textContent = data.service?.environment || '—';
+
+    renderGate(github);
+    renderSecurity(github);
+    renderServices(data);
+    renderPipeline(github.stages || []);
+    renderDeployments(github.deployments || {});
+    renderHistory(github.recentRuns || []);
+
+    elements.lastUpdated.textContent = `Updated ${formatDate(data.generatedAt)}${github.cached ? ' · cached' : ''}`;
+
+    if (github.error && !silent) {
+      showToast(github.error, 'error');
+    }
+  } catch (error) {
+    if (!silent) showToast(error.message, 'error');
+    elements.releaseTitle.textContent = 'Dashboard temporarily unavailable';
+    elements.releaseMeta.textContent = error.message;
+  } finally {
+    elements.refreshButton.disabled = false;
+  }
+}
+
+
+const workloadState = { tasks: [], busy: false };
+
+async function workloadRequest(url, options = {}) {
   const response = await fetch(url, {
     headers: {
       'Content-Type': 'application/json',
@@ -55,209 +274,112 @@ async function apiRequest(url, options = {}) {
     ...options
   });
 
-  if (response.status === 204) {
-    return null;
-  }
-
+  if (response.status === 204) return null;
   const body = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    throw new Error(body.message || body.error || 'Request failed');
-  }
-
+  if (!response.ok) throw new Error(body.message || body.error || 'Workload request failed');
   return body;
 }
 
-function updateStats() {
-  const completed = state.tasks.filter((task) => task.completed).length;
-  elements.totalCount.textContent = state.tasks.length;
-  elements.completedCount.textContent = completed;
-  elements.openCount.textContent = state.tasks.length - completed;
+function renderWorkload() {
+  const tasks = workloadState.tasks;
+  const open = tasks.filter((task) => !task.completed).length;
+  elements.workloadCount.textContent = `${tasks.length} task${tasks.length === 1 ? '' : 's'} · ${open} open`;
+  elements.workloadEmpty.classList.toggle('hidden', tasks.length !== 0);
+  elements.workloadError.classList.add('hidden');
+  elements.workloadStatus.textContent = 'Connected';
+  elements.workloadStatus.className = 'status-pill success';
+
+  elements.workloadTasks.innerHTML = tasks.map((task) => `
+    <article class="workload-card${task.completed ? ' done' : ''}" data-workload-id="${escapeHtml(task._id)}">
+      <button class="workload-toggle" type="button" data-workload-action="toggle" aria-label="${task.completed ? 'Reopen task' : 'Complete task'}">${task.completed ? '✓' : ''}</button>
+      <div>
+        <h3 class="workload-task-title">${escapeHtml(task.title)}</h3>
+        <p class="workload-task-description">${escapeHtml(task.description || 'No description')}</p>
+        <span class="workload-task-meta">${task.completed ? 'Completed' : 'Open'} · ${escapeHtml(formatDate(task.createdAt))}</span>
+      </div>
+      <button class="workload-delete" type="button" data-workload-action="delete">Delete</button>
+    </article>
+  `).join('');
 }
 
-function visibleTasks() {
-  if (state.filter === 'open') {
-    return state.tasks.filter((task) => !task.completed);
-  }
-  if (state.filter === 'completed') {
-    return state.tasks.filter((task) => task.completed);
-  }
-  return state.tasks;
-}
-
-function renderTasks() {
-  updateStats();
-  const tasks = visibleTasks();
-
-  elements.loadingState.classList.add('hidden');
-  elements.errorState.classList.add('hidden');
-  elements.emptyState.classList.toggle('hidden', tasks.length !== 0);
-
-  elements.taskList.innerHTML = tasks.map((task) => {
-    const createdAt = new Date(task.createdAt).toLocaleString();
-    const description = task.description
-      ? `<p class="task-description">${escapeHtml(task.description)}</p>`
-      : '<p class="task-description">No description</p>';
-
-    return `
-      <article class="task-card${task.completed ? ' completed' : ''}" data-task-id="${task._id}">
-        <button class="check-button" data-action="toggle" aria-label="${task.completed ? 'Mark task as open' : 'Mark task as completed'}">${task.completed ? '✓' : ''}</button>
-        <div>
-          <h3 class="task-title">${escapeHtml(task.title)}</h3>
-          ${description}
-          <span class="task-meta">Created ${escapeHtml(createdAt)}</span>
-        </div>
-        <div class="task-actions">
-          <button class="button edit" data-action="edit" type="button">Edit</button>
-          <button class="button danger" data-action="delete" type="button">Delete</button>
-        </div>
-      </article>
-    `;
-  }).join('');
-}
-
-async function loadTasks() {
-  elements.loadingState.classList.remove('hidden');
-  elements.errorState.classList.add('hidden');
-  elements.taskList.innerHTML = '';
-
+async function loadWorkload({ silent = false } = {}) {
   try {
-    state.tasks = await apiRequest(API_URL);
-    renderTasks();
+    workloadState.tasks = await workloadRequest(TASKS_URL);
+    renderWorkload();
   } catch (error) {
-    elements.loadingState.classList.add('hidden');
-    elements.errorState.textContent = `Could not load tasks: ${error.message}`;
-    elements.errorState.classList.remove('hidden');
+    elements.workloadStatus.textContent = 'Unavailable';
+    elements.workloadStatus.className = 'status-pill failure';
+    elements.workloadError.textContent = error.message;
+    elements.workloadError.classList.remove('hidden');
+    if (!silent) showToast(`Workload: ${error.message}`, 'error');
   }
 }
 
-async function checkHealth() {
-  try {
-    const health = await apiRequest('/health');
-    elements.serviceStatus.className = 'service-status online';
-    elements.serviceStatus.innerHTML = '<span class="status-dot"></span><span>API online</span>';
-    return health;
-  } catch (error) {
-    elements.serviceStatus.className = 'service-status offline';
-    elements.serviceStatus.innerHTML = '<span class="status-dot"></span><span>API offline</span>';
-    return null;
-  }
-}
-
-function resetForm() {
-  elements.form.reset();
-  elements.editingTaskId.value = '';
-  elements.formHeading.textContent = 'Create a task';
-  elements.submitButton.textContent = 'Add task';
-  elements.cancelEditButton.classList.add('hidden');
-}
-
-function startEditing(task) {
-  elements.editingTaskId.value = task._id;
-  elements.title.value = task.title;
-  elements.description.value = task.description || '';
-  elements.formHeading.textContent = 'Edit task';
-  elements.submitButton.textContent = 'Save changes';
-  elements.cancelEditButton.classList.remove('hidden');
-  elements.title.focus();
-  window.scrollTo({ top: 0, behavior: 'smooth' });
-}
-
-elements.form.addEventListener('submit', async (event) => {
+elements.workloadForm.addEventListener('submit', async (event) => {
   event.preventDefault();
-  if (state.busy) return;
+  if (workloadState.busy) return;
 
-  const title = elements.title.value.trim();
-  const description = elements.description.value.trim();
-  const editingId = elements.editingTaskId.value;
-
-  state.busy = true;
-  elements.submitButton.disabled = true;
+  workloadState.busy = true;
+  elements.workloadSubmit.disabled = true;
 
   try {
-    if (editingId) {
-      await apiRequest(`${API_URL}/${editingId}`, {
-        method: 'PUT',
-        body: JSON.stringify({ title, description })
-      });
-      showToast('Task updated');
-    } else {
-      await apiRequest(API_URL, {
-        method: 'POST',
-        body: JSON.stringify({ title, description })
-      });
-      showToast('Task created');
-    }
-
-    resetForm();
-    await loadTasks();
+    await workloadRequest(TASKS_URL, {
+      method: 'POST',
+      body: JSON.stringify({
+        title: elements.workloadTitle.value.trim(),
+        description: elements.workloadDescription.value.trim()
+      })
+    });
+    elements.workloadForm.reset();
+    showToast('Workload task created');
+    await loadWorkload({ silent: true });
   } catch (error) {
     showToast(error.message, 'error');
   } finally {
-    state.busy = false;
-    elements.submitButton.disabled = false;
+    workloadState.busy = false;
+    elements.workloadSubmit.disabled = false;
   }
 });
 
-elements.cancelEditButton.addEventListener('click', resetForm);
-
-elements.taskList.addEventListener('click', async (event) => {
-  const actionButton = event.target.closest('[data-action]');
-  const card = event.target.closest('[data-task-id]');
+elements.workloadTasks.addEventListener('click', async (event) => {
+  const actionButton = event.target.closest('[data-workload-action]');
+  const card = event.target.closest('[data-workload-id]');
   if (!actionButton || !card) return;
 
-  const task = state.tasks.find((item) => item._id === card.dataset.taskId);
+  const task = workloadState.tasks.find((item) => item._id === card.dataset.workloadId);
   if (!task) return;
-
-  const action = actionButton.dataset.action;
-
-  if (action === 'edit') {
-    startEditing(task);
-    return;
-  }
 
   try {
     actionButton.disabled = true;
-
-    if (action === 'toggle') {
-      await apiRequest(`${API_URL}/${task._id}`, {
+    if (actionButton.dataset.workloadAction === 'toggle') {
+      await workloadRequest(`${TASKS_URL}/${task._id}`, {
         method: 'PUT',
         body: JSON.stringify({ completed: !task.completed })
       });
       showToast(task.completed ? 'Task reopened' : 'Task completed');
-    }
-
-    if (action === 'delete') {
-      const confirmed = window.confirm(`Delete “${task.title}”?`);
-      if (!confirmed) {
+    } else if (actionButton.dataset.workloadAction === 'delete') {
+      if (!window.confirm(`Delete “${task.title}”?`)) {
         actionButton.disabled = false;
         return;
       }
-      await apiRequest(`${API_URL}/${task._id}`, { method: 'DELETE' });
-      if (elements.editingTaskId.value === task._id) resetForm();
+      await workloadRequest(`${TASKS_URL}/${task._id}`, { method: 'DELETE' });
       showToast('Task deleted');
     }
-
-    await loadTasks();
+    await loadWorkload({ silent: true });
   } catch (error) {
-    showToast(error.message, 'error');
     actionButton.disabled = false;
+    showToast(error.message, 'error');
   }
 });
 
-document.querySelectorAll('.filter').forEach((button) => {
-  button.addEventListener('click', () => {
-    state.filter = button.dataset.filter;
-    document.querySelectorAll('.filter').forEach((item) => item.classList.remove('active'));
-    button.classList.add('active');
-    renderTasks();
-  });
+elements.workloadRefresh.addEventListener('click', async () => {
+  elements.workloadRefresh.disabled = true;
+  await loadWorkload();
+  elements.workloadRefresh.disabled = false;
 });
 
-elements.refreshButton.addEventListener('click', async () => {
-  elements.refreshButton.disabled = true;
-  await Promise.all([loadTasks(), checkHealth()]);
-  elements.refreshButton.disabled = false;
-});
+elements.refreshButton.addEventListener('click', () => loadOverview({ force: true }));
 
-Promise.all([loadTasks(), checkHealth()]);
-setInterval(checkHealth, 30000);
+Promise.all([loadOverview(), loadWorkload({ silent: true })]);
+setInterval(() => loadOverview({ silent: true }), 30_000);
+setInterval(() => loadWorkload({ silent: true }), 30_000);

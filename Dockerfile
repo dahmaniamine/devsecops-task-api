@@ -8,7 +8,6 @@ COPY package*.json ./
 
 RUN npm ci --omit=dev
 
-
 FROM node:20-alpine AS runtime
 
 WORKDIR /app

@@ -3,91 +3,215 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="description" content="A Dockerized task manager built with Node.js, MongoDB and a secure CI/CD pipeline." />
-  <title>DevSecOps Task Board</title>
+  <meta name="description" content="SecureShip Lite - a live DevSecOps software delivery dashboard." />
+  <title>SecureShip Lite · DevSecOps Release Platform</title>
   <link rel="stylesheet" href="/styles.css" />
   <script src="/app.js" defer></script>
 </head>
 <body>
-  <div class="page-shell">
+  <div class="ambient ambient-a"></div>
+  <div class="ambient ambient-b"></div>
+
+  <div class="shell">
     <header class="topbar">
-      <div>
-        <div class="eyebrow">DOCKER · NODE.JS · MONGODB · CI/CD</div>
-        <h1>DevSecOps Task Board</h1>
-        <p class="subtitle">A real frontend connected to your containerized REST API.</p>
+      <div class="brand-block">
+        <div class="logo-mark" aria-hidden="true">S</div>
+        <div>
+          <div class="eyebrow">SECURE SOFTWARE DELIVERY</div>
+          <h1>SecureShip <span>Lite</span></h1>
+          <p>Live CI/CD, security-gate and release intelligence for the containerized API.</p>
+        </div>
       </div>
-      <div class="service-status" id="serviceStatus" aria-live="polite">
-        <span class="status-dot"></span>
-        <span>Checking API…</span>
+
+      <div class="topbar-actions">
+        <a id="repoLink" class="button secondary" href="#" target="_blank" rel="noreferrer">Repository ↗</a>
+        <button id="refreshButton" class="button primary" type="button">Refresh</button>
       </div>
     </header>
 
-    <main class="layout">
-      <section class="panel composer-panel">
+    <main>
+      <section class="hero-grid">
+        <article class="panel release-panel">
+          <div class="panel-label">RELEASE GATE</div>
+          <div class="release-row">
+            <div>
+              <div id="gateBadge" class="gate-badge pending">CHECKING</div>
+              <h2 id="releaseTitle">Loading latest release…</h2>
+              <p id="releaseMeta" class="muted">Connecting to GitHub Actions.</p>
+            </div>
+            <div class="commit-chip">
+              <span>COMMIT</span>
+              <strong id="commitSha">—</strong>
+            </div>
+          </div>
+          <div class="release-details">
+            <div><span>Branch</span><strong id="branchValue">—</strong></div>
+            <div><span>Event</span><strong id="eventValue">—</strong></div>
+            <div><span>Duration</span><strong id="durationValue">—</strong></div>
+            <div><span>Environment</span><strong id="environmentValue">—</strong></div>
+          </div>
+        </article>
+
+        <article class="panel posture-panel">
+          <div class="panel-heading compact">
+            <div>
+              <div class="panel-label">SECURITY POSTURE</div>
+              <h2>Release policy</h2>
+            </div>
+            <div id="shieldIcon" class="shield">✓</div>
+          </div>
+          <div class="severity-row">
+            <div class="severity critical"><span>Critical gate</span><strong id="criticalCount">—</strong></div>
+            <div class="severity high"><span>High gate</span><strong id="highCount">—</strong></div>
+            <div class="severity sbom"><span>SBOM</span><strong id="sbomState">—</strong></div>
+          </div>
+          <p id="securityStatement" class="muted security-statement">Loading security evidence…</p>
+        </article>
+      </section>
+
+      <section class="metric-grid">
+        <article class="metric-card">
+          <span class="metric-icon">◉</span>
+          <div><small>API</small><strong id="apiStatus">Checking</strong><p id="apiDetail">—</p></div>
+        </article>
+        <article class="metric-card">
+          <span class="metric-icon">◆</span>
+          <div><small>DATABASE</small><strong id="databaseStatus">Checking</strong><p>MongoDB</p></div>
+        </article>
+        <article class="metric-card">
+          <span class="metric-icon">⬢</span>
+          <div><small>CONTAINER REGISTRY</small><strong id="registryStatus">Pending</strong><p id="registryImage">—</p></div>
+        </article>
+        <article class="metric-card">
+          <span class="metric-icon">↗</span>
+          <div><small>PRODUCTION</small><strong id="productionStatus">Not configured</strong><p>Render deployment gate</p></div>
+        </article>
+      </section>
+
+      <section class="panel pipeline-panel">
         <div class="panel-heading">
           <div>
-            <span class="section-kicker">TASK EDITOR</span>
-            <h2 id="formHeading">Create a task</h2>
+            <div class="panel-label">SOFTWARE SUPPLY CHAIN</div>
+            <h2>Latest pipeline</h2>
           </div>
-          <button id="cancelEditButton" class="button ghost hidden" type="button">Cancel edit</button>
+          <a id="workflowLink" class="text-link disabled" href="#" target="_blank" rel="noreferrer">Open workflow ↗</a>
         </div>
-
-        <form id="taskForm" class="task-form">
-          <input id="editingTaskId" type="hidden" />
-          <label>
-            <span>Title</span>
-            <input id="title" name="title" minlength="2" maxlength="120" placeholder="e.g. Configure production deployment" required />
-          </label>
-          <label>
-            <span>Description</span>
-            <textarea id="description" name="description" maxlength="500" rows="5" placeholder="Add useful details about the task…"></textarea>
-          </label>
-          <button class="button primary" id="submitButton" type="submit">Add task</button>
-        </form>
+        <div id="pipelineStages" class="pipeline-stages">
+          <div class="loading-block">Loading pipeline stages…</div>
+        </div>
       </section>
 
-      <section class="workspace">
-        <div class="stats-grid" aria-label="Task statistics">
-          <article class="stat-card">
-            <span>Total tasks</span>
-            <strong id="totalCount">0</strong>
-          </article>
-          <article class="stat-card">
-            <span>Open</span>
-            <strong id="openCount">0</strong>
-          </article>
-          <article class="stat-card">
-            <span>Completed</span>
-            <strong id="completedCount">0</strong>
-          </article>
-        </div>
-
-        <section class="panel tasks-panel">
-          <div class="tasks-toolbar">
+      <section class="two-column">
+        <article class="panel deployment-panel">
+          <div class="panel-heading compact">
             <div>
-              <span class="section-kicker">WORK QUEUE</span>
-              <h2>Your tasks</h2>
-            </div>
-            <div class="toolbar-actions">
-              <div class="filters" role="group" aria-label="Filter tasks">
-                <button class="filter active" data-filter="all" type="button">All</button>
-                <button class="filter" data-filter="open" type="button">Open</button>
-                <button class="filter" data-filter="completed" type="button">Done</button>
-              </div>
-              <button class="button icon-button" id="refreshButton" type="button" title="Refresh tasks" aria-label="Refresh tasks">↻</button>
+              <div class="panel-label">PROMOTION PATH</div>
+              <h2>Deployment environments</h2>
             </div>
           </div>
+          <div class="deployment-path">
+            <div class="deployment-node">
+              <span class="node-number">01</span>
+              <div><small>STAGING</small><strong id="stagingStatus">Not configured</strong></div>
+            </div>
+            <div class="path-line"></div>
+            <div class="deployment-node">
+              <span class="node-number">02</span>
+              <div><small>SMOKE TEST</small><strong id="smokeStatus">Not configured</strong></div>
+            </div>
+            <div class="path-line"></div>
+            <div class="deployment-node">
+              <span class="node-number">03</span>
+              <div><small>PRODUCTION</small><strong id="productionPathStatus">Not configured</strong></div>
+            </div>
+          </div>
+          <p class="hint">Deployment steps remain visibly skipped until their Render secrets are configured in GitHub Actions.</p>
+        </article>
 
-          <div id="loadingState" class="state-message">Loading tasks…</div>
-          <div id="errorState" class="state-message error hidden"></div>
-          <div id="emptyState" class="empty-state hidden">
-            <div class="empty-icon">✓</div>
-            <h3>No tasks here</h3>
-            <p>Create a task or change the current filter.</p>
+        <article class="panel evidence-panel">
+          <div class="panel-heading compact">
+            <div>
+              <div class="panel-label">SUPPLY-CHAIN EVIDENCE</div>
+              <h2>What the pipeline produces</h2>
+            </div>
           </div>
-          <div id="taskList" class="task-list"></div>
-        </section>
+          <div class="evidence-list">
+            <div class="evidence-item"><span>01</span><div><strong>Trivy report</strong><p>Machine-readable vulnerability evidence</p></div></div>
+            <div class="evidence-item"><span>02</span><div><strong>CycloneDX SBOM</strong><p>Software bill of materials for each release</p></div></div>
+            <div class="evidence-item"><span>03</span><div><strong>Immutable image</strong><p id="imageEvidence">Tagged with the Git commit SHA</p></div></div>
+          </div>
+        </article>
       </section>
+
+      <section class="panel workload-panel">
+        <div class="panel-heading workload-heading">
+          <div>
+            <div class="panel-label">MANAGED WORKLOAD</div>
+            <h2>Task API workload</h2>
+            <p class="muted workload-copy">Use the application delivered by SecureShip while the dashboard monitors the release pipeline around it.</p>
+          </div>
+          <div class="workload-summary">
+            <span id="workloadStatus" class="status-pill in_progress">Checking</span>
+            <strong id="workloadCount">0 tasks</strong>
+          </div>
+        </div>
+
+        <div class="workload-grid">
+          <form id="workloadTaskForm" class="workload-form">
+            <label>
+              <span>Task title</span>
+              <input id="workloadTitle" minlength="2" maxlength="120" placeholder="e.g. Verify production release" required />
+            </label>
+            <label>
+              <span>Description</span>
+              <textarea id="workloadDescription" maxlength="500" rows="4" placeholder="Describe the workload task…"></textarea>
+            </label>
+            <button id="workloadSubmit" class="button primary" type="submit">Add task</button>
+          </form>
+
+          <div class="workload-list-panel">
+            <div class="workload-toolbar">
+              <div>
+                <span class="panel-label">LIVE APPLICATION DATA</span>
+                <p class="muted tiny">Stored in MongoDB through <span class="mono">/api/tasks</span></p>
+              </div>
+              <button id="workloadRefresh" class="button secondary small-button" type="button">Refresh</button>
+            </div>
+            <div id="workloadError" class="workload-error hidden"></div>
+            <div id="workloadEmpty" class="workload-empty hidden">No workload tasks yet.</div>
+            <div id="workloadTasks" class="workload-tasks"></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel history-panel">
+        <div class="panel-heading">
+          <div>
+            <div class="panel-label">RELEASE HISTORY</div>
+            <h2>Recent pipeline runs</h2>
+          </div>
+          <span id="lastUpdated" class="muted tiny">—</span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Status</th>
+                <th>Release</th>
+                <th>Commit</th>
+                <th>Branch</th>
+                <th>Event</th>
+                <th>Duration</th>
+                <th>Started</th>
+              </tr>
+            </thead>
+            <tbody id="runHistory">
+              <tr><td colspan="7" class="table-empty">Loading release history…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
     </main>
   </div>
 

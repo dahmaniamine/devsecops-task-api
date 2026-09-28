@@ -1,0 +1,27 @@
+SECURESHIP LITE PATCH
+
+Replace:
+- .github/workflows/ci.yml
+- .env.example
+- ARCHITECTURE.txt
+- Dockerfile
+- INTERVIEW_NOTES.md
+- README.md
+- docker-compose.yml
+- package.json
+- render.yaml
+- src/app.js
+- src/config.js
+- public/index.html
+- public/styles.css
+- public/app.js
+
+Add:
+- src/controllers/devsecopsController.js
+- src/routes/devsecops.js
+- src/services/githubService.js
+- scripts/security-gate.js
+- tests/securityGate.test.js
+- docs/SECURESHIP.md
+
+No existing task API files need to be deleted.

@@ -1,0 +1,7 @@
+SecureShip UI v2
+
+Changes:
+- Adds a "Managed Workload" panel for the existing /api/tasks application.
+- Create, complete/reopen, refresh, and delete workload tasks from the SecureShip dashboard.
+- Removes the bottom architecture/footer strip.
+- No backend changes required; existing task API remains the workload managed by SecureShip.

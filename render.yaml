@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: devsecops-task-api
+    name: secureship-lite
     runtime: docker
     plan: free
     dockerfilePath: ./Dockerfile
@@ -10,5 +10,9 @@ services:
         value: 3000
       - key: NODE_ENV
         value: production
+      - key: GITHUB_REPOSITORY
+        value: dahmaniamine/devsecops-task-api
       - key: MONGODB_URI
+        sync: false
+      - key: GITHUB_TOKEN
         sync: false

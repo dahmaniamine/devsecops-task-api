@@ -1,16 +1,30 @@
-# DevSecOps Task API
+# SecureShip Lite
 
-A small portfolio project built to demonstrate the exact foundations commonly requested for a junior DevSecOps internship:
+SecureShip Lite is a small **secure software delivery platform** built around a real Node.js / MongoDB workload.
 
-- Git / GitHub workflow
-- Docker and Docker Compose
-- Node.js REST API development
-- MongoDB / NoSQL
-- Automated tests
-- CI/CD with GitHub Actions
-- Dependency auditing with `npm audit`
-- Container vulnerability scanning with Trivy
-- Cloud deployment to Render
+The original task API is still present, but it is no longer the point of the project. It is the application that the DevSecOps pipeline builds, tests, scans, packages and releases.
+
+The browser dashboard at `http://localhost:3000` reads your **real GitHub Actions data** and visualizes release readiness, security controls, SBOM generation, container publication and deployment stages.
+
+## Why this project exists
+
+The project demonstrates practical junior DevSecOps concepts instead of only CRUD functionality:
+
+- Git / GitHub
+- GitHub Actions CI/CD
+- Node.js / Express
+- MongoDB
+- Docker / Docker Compose
+- Jest / Supertest
+- `npm audit`
+- Trivy container vulnerability scanning
+- explicit security policy gate
+- CycloneDX SBOM generation
+- GitHub Actions security-evidence artifacts
+- GitHub Container Registry (GHCR)
+- optional staging deployment + smoke test
+- optional production deployment to Render
+- live pipeline/release dashboard
 
 ## Architecture
 
@@ -19,225 +33,172 @@ Developer
    |
    | git push
    v
-GitHub Repository
+GitHub
    |
    v
 GitHub Actions
-   |-- npm test
+   |-- npm ci
+   |-- automated tests
    |-- npm audit
-   |-- docker build
-   |-- Trivy scan
+   |-- Docker build
+   |-- Trivy JSON scan
+   |-- security policy gate
+   |-- CycloneDX SBOM
+   |-- evidence artifact
+   |-- GHCR image publish
+   |-- optional staging deploy
+   |-- optional smoke test
+   |-- optional production deploy
    |
-   v
-Render Deploy Hook (optional)
-   |
-   v
-Dockerized Node.js API
-   |
-   v
-MongoDB Atlas (cloud)
+   +-------------------------+
+                             |
+                             v
+                    SecureShip dashboard
+                    /api/devsecops/overview
+                             |
+                 +-----------+-----------+
+                 |                       |
+                 v                       v
+             Node.js API              MongoDB
 ```
 
-For local development, Docker Compose runs both the API and MongoDB:
+## Security gate
+
+The workflow intentionally does **not** hide serious findings.
+
+Trivy produces `trivy-report.json`. `scripts/security-gate.js` parses that report and blocks the release if a fixable **HIGH** or **CRITICAL** vulnerability remains.
 
 ```text
-Browser / Postman
-       |
-       v
-Node.js API container :3000
-       |
-       v
-MongoDB container :27017
+HIGH/CRITICAL finding > 0
+        -> release BLOCKED
+
+HIGH/CRITICAL finding = 0
+        -> release APPROVED
 ```
 
-## API endpoints
+This is the same concept that already occurred during development: Trivy initially blocked the image, the runtime image was hardened, and the next pipeline passed.
 
-| Method | Endpoint | Description |
-|---|---|---|
-| GET | `/health` | Health check |
-| GET | `/api/tasks` | List all tasks |
-| POST | `/api/tasks` | Create a task |
-| GET | `/api/tasks/:id` | Get one task |
-| PUT | `/api/tasks/:id` | Update a task |
-| DELETE | `/api/tasks/:id` | Delete a task |
+## SBOM and supply-chain evidence
 
-Example task body:
+For every CI run, the pipeline creates:
 
-```json
-{
-  "title": "Learn Docker",
-  "description": "Containerize the API",
-  "completed": false
-}
+- `trivy-report.json`
+- `sbom.cdx.json` in CycloneDX format
+
+Both are uploaded as a GitHub Actions artifact named:
+
+```text
+security-evidence-<commit-sha>
 ```
 
-## 1. Run with Docker Compose
+On a successful push to `main`, the Docker image is also published to:
 
-Install Docker Desktop, then run:
+```text
+ghcr.io/dahmaniamine/devsecops-task-api:<commit-sha>
+ghcr.io/dahmaniamine/devsecops-task-api:latest
+```
+
+## Dashboard
+
+Open:
+
+```text
+http://localhost:3000
+```
+
+The dashboard displays:
+
+- release gate: approved / blocked / running
+- latest commit and branch
+- real GitHub Actions stages
+- security posture
+- SBOM generation status
+- API and MongoDB health
+- GHCR publication status
+- staging / smoke-test / production states
+- recent pipeline history
+
+GitHub data is cached for three minutes so the public API rate limit is not exhausted.
+
+## Local setup
+
+From WSL / Ubuntu:
 
 ```bash
-docker compose up --build
+docker compose down
+docker compose up --build -d
 ```
 
 Open:
 
 ```text
-http://localhost:3000/health
+http://localhost:3000
 ```
 
-Stop the stack:
-
-```bash
-docker compose down
-```
-
-Remove the local MongoDB volume too:
-
-```bash
-docker compose down -v
-```
-
-## 2. Run without Docker
-
-You need Node.js 20+ and MongoDB running locally.
-
-```bash
-cp .env.example .env
-npm install
-npm start
-```
-
-For development with automatic restart:
-
-```bash
-npm run dev
-```
-
-## 3. Run tests
-
-```bash
-npm test
-```
-
-The tests use Jest and Supertest. The task model is mocked, so CI can test the HTTP layer without requiring a database service.
-
-## 4. Try the API
-
-Health check:
+Check the API:
 
 ```bash
 curl http://localhost:3000/health
 ```
 
-Create a task:
+Run tests:
 
 ```bash
-curl -X POST http://localhost:3000/api/tasks \
-  -H "Content-Type: application/json" \
-  -d '{"title":"Learn Docker","description":"Containerize the API"}'
+npm test
 ```
 
-List tasks:
-
-```bash
-curl http://localhost:3000/api/tasks
-```
-
-Or run:
-
-```bash
-./scripts/demo.sh
-```
-
-## 5. CI/CD pipeline
-
-The workflow is located at:
+## Environment variables
 
 ```text
-.github/workflows/ci.yml
+PORT=3000
+MONGODB_URI=mongodb://localhost:27017/devsecops_tasks
+NODE_ENV=development
+GITHUB_REPOSITORY=dahmaniamine/devsecops-task-api
+GITHUB_TOKEN=
 ```
 
-On pushes and pull requests, GitHub Actions performs:
+`GITHUB_TOKEN` is optional for a public repository. Add one as an environment variable only if you want a higher API rate limit. Never commit it.
 
-1. Checkout
-2. Node.js setup
-3. Install dependencies (`npm ci` when a lockfile exists, otherwise `npm install`)
-4. Automated tests
-5. `npm audit`
-6. Docker image build
-7. Trivy container vulnerability scan
-8. Optional Render deployment through a deploy hook
+## Optional staging and production deployment
 
-### Important: generate `package-lock.json`
-
-Before pushing the repository for the first time, run:
-
-```bash
-npm install
-```
-
-This generates `package-lock.json`. Commit it. Once the lockfile exists, the CI workflow automatically uses `npm ci` for reproducible installs.
-
-## 6. Deploy to Render
-
-The repository includes `render.yaml` and `Dockerfile`.
-
-### Database
-
-For cloud deployment, create a MongoDB Atlas database and copy its connection string.
-
-In Render, add:
+GitHub Actions recognizes these repository secrets:
 
 ```text
-MONGODB_URI=<your MongoDB Atlas connection string>
-NODE_ENV=production
-```
-
-Do not commit the real connection string into Git.
-
-### Optional CD deploy hook
-
-To let GitHub Actions trigger Render after a successful pipeline:
-
-1. Create the Render web service.
-2. In Render, create/copy its Deploy Hook URL.
-3. In GitHub repository settings, add an Actions secret named:
-
-```text
+RENDER_STAGING_DEPLOY_HOOK_URL
+STAGING_HEALTH_URL
 RENDER_DEPLOY_HOOK_URL
 ```
 
-4. Push to `main` or `master`.
+If they are absent, the corresponding deployment stages are skipped visibly instead of pretending a deployment occurred.
 
-If the secret is not present, CI still runs and the deployment step is skipped safely.
+## Cloud database
 
-## 7. Security choices in this project
+For Render, use MongoDB Atlas and configure:
 
-- `helmet` adds common HTTP security headers.
-- Request JSON is limited to 100 KB.
-- `npm audit` checks dependency vulnerabilities.
-- Trivy scans the built Docker image for HIGH/CRITICAL vulnerabilities.
-- The Docker container runs as an unprivileged user (`appuser`), not root.
-- Secrets are provided through environment variables rather than committed to Git.
-- The API only accepts an allowlist of fields during updates.
-
-## 8. Suggested Git workflow
-
-```bash
-git init
-git add .
-git commit -m "Build Dockerized task API with CI/CD security pipeline"
-git branch -M main
-git remote add origin <your-repository-url>
-git push -u origin main
+```text
+MONGODB_URI=<Atlas connection string>
 ```
 
-For future changes, create branches and pull requests instead of working directly on `main`.
+Do not commit the real connection string.
 
-## 9. What this project demonstrates in an interview
+## Existing workload API
 
-You can explain the project like this:
+The original workload remains available:
 
-> I built a Node.js REST API backed by MongoDB and containerized the API and database with Docker Compose. I added automated tests with Jest and Supertest and created a GitHub Actions CI/CD pipeline that tests the code, audits Node dependencies, builds the Docker image, scans it with Trivy, and can trigger deployment to Render after a successful push.
+| Method | Endpoint | Description |
+|---|---|---|
+| GET | `/health` | Health check |
+| GET | `/api/tasks` | List tasks |
+| POST | `/api/tasks` | Create task |
+| GET | `/api/tasks/:id` | Get one task |
+| PUT | `/api/tasks/:id` | Update task |
+| DELETE | `/api/tasks/:id` | Delete task |
+| GET | `/api/devsecops/overview` | SecureShip live overview |
 
-Do not memorize the sentence only. Be able to explain each step and why it exists.
+## Interview explanation
+
+A concise explanation:
+
+> I built a containerized Node.js and MongoDB application, then built SecureShip Lite around it as a secure software-delivery pipeline. GitHub Actions runs automated tests and dependency auditing, builds the Docker image, scans the image with Trivy, enforces a policy gate, generates a CycloneDX SBOM, uploads security evidence and publishes successful images to GHCR. The dashboard consumes live GitHub Actions data to show release status, security posture, registry publication and deployment readiness.
+
+Be prepared to explain **why** each gate exists, especially the difference between building an image and allowing that image to be released.

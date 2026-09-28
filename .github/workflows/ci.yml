@@ -8,6 +8,14 @@ on:
 
 permissions:
   contents: read
+  packages: write
+
+env:
+  LOCAL_IMAGE: devsecops-task-api:${{ github.sha }}
+  GHCR_IMAGE: ghcr.io/${{ github.repository }}
+  RENDER_STAGING_DEPLOY_HOOK_URL: ${{ secrets.RENDER_STAGING_DEPLOY_HOOK_URL }}
+  STAGING_HEALTH_URL: ${{ secrets.STAGING_HEALTH_URL }}
+  RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
 
 jobs:
   test-build-scan:
@@ -21,14 +29,10 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
+          cache: npm
 
       - name: Install dependencies
-        run: |
-          if [ -f package-lock.json ]; then
-            npm ci
-          else
-            npm install
-          fi
+        run: npm ci
 
       - name: Run automated tests
         run: npm test
@@ -37,30 +41,68 @@ jobs:
         run: npm audit --audit-level=high
 
       - name: Build Docker image
-        run: docker build -t devsecops-task-api:${{ github.sha }} .
+        run: docker build -t "$LOCAL_IMAGE" .
 
       - name: Scan Docker image with Trivy
         uses: aquasecurity/trivy-action@v0.36.0
         with:
-          image-ref: devsecops-task-api:${{ github.sha }}
-          format: table
+          image-ref: ${{ env.LOCAL_IMAGE }}
+          format: json
+          output: trivy-report.json
           severity: CRITICAL,HIGH
           ignore-unfixed: true
-          exit-code: '1'
+          exit-code: '0'
 
-      - name: Trigger Render deployment on main/master
-        if: github.event_name == 'push'
-        env:
-          RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+      - name: Security policy gate
+        run: node scripts/security-gate.js trivy-report.json
+
+      - name: Generate SBOM
+        run: trivy image --format cyclonedx --output sbom.cdx.json "$LOCAL_IMAGE"
+
+      - name: Upload security evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-evidence-${{ github.sha }}
+          path: |
+            trivy-report.json
+            sbom.cdx.json
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Authenticate to GHCR
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish image to GHCR
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
-          if [ -z "$RENDER_DEPLOY_HOOK_URL" ]; then
-            echo "RENDER_DEPLOY_HOOK_URL is not configured; skipping deployment."
-            exit 0
-          fi
+          docker tag "$LOCAL_IMAGE" "$GHCR_IMAGE:${GITHUB_SHA}"
+          docker tag "$LOCAL_IMAGE" "$GHCR_IMAGE:latest"
+          docker push "$GHCR_IMAGE:${GITHUB_SHA}"
+          docker push "$GHCR_IMAGE:latest"
 
-          if [ "${GITHUB_REF_NAME}" != "main" ] && [ "${GITHUB_REF_NAME}" != "master" ]; then
-            echo "Not the deployment branch; skipping deployment."
-            exit 0
-          fi
+      - name: Deploy to staging
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && env.RENDER_STAGING_DEPLOY_HOOK_URL != ''
+        run: curl --fail --silent --show-error --request POST "$RENDER_STAGING_DEPLOY_HOOK_URL"
 
-          curl --fail --silent --show-error --request POST "$RENDER_DEPLOY_HOOK_URL"
+      - name: Smoke test staging
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && env.STAGING_HEALTH_URL != ''
+        run: |
+          for attempt in {1..12}; do
+            if curl --fail --silent --show-error "$STAGING_HEALTH_URL"; then
+              echo "Staging health check passed."
+              exit 0
+            fi
+            echo "Waiting for staging... attempt $attempt/12"
+            sleep 10
+          done
+          echo "Staging health check failed."
+          exit 1
+
+      - name: Deploy to production
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && env.RENDER_DEPLOY_HOOK_URL != ''
+        run: curl --fail --silent --show-error --request POST "$RENDER_DEPLOY_HOOK_URL"
